@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="./assets/dvd-logo.svg" alt="DVD Logo Bouncer" width="220" />
+  <a href="https://dormandel.github.io/DVD-Logo-Bounce-HTML/">
+    <img src="./assets/dvd-logo.svg" alt="DVD Logo Bouncer" width="220" />
+  </a>
 </p>
 
 <h1 align="center">DVD Logo Bouncer</h1>
