@@ -1,0 +1,2434 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+
+<head>
+  <!-- #region 00_HEAD_META
+       =========================================================
+       Purpose:
+       Defines the page metadata, browser tab title, and favicon.
+
+       Notes:
+       - The title is also updated by JavaScript whenever the
+         corner counter changes.
+       - The favicon is rebuilt dynamically as an SVG data URL so
+         it can follow the DVD logo color.
+       ========================================================= -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DVD • Corners: 0</title>
+  <link id="faviconLink" rel="icon"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23060912'/%3E%3Cellipse cx='32' cy='43' rx='22' ry='6' fill='none' stroke='%2338bdf8' stroke-width='4'/%3E%3Ctext x='32' y='35' text-anchor='middle' font-family='Arial Black,Arial,sans-serif' font-size='17' font-weight='900' fill='%2338bdf8'%3EDVD%3C/text%3E%3C/svg%3E" />
+  <!-- #endregion 00_HEAD_META -->
+
+  <style>
+    /* =========================================================
+       🎬 DVD CORNER COUNTER — FINAL SINGLE FILE
+       =========================================================
+
+       FILE MAP
+       ---------------------------------------------------------
+       HTML REGIONS
+       00_HEAD_META
+       01_HTML_MENU_BUTTON
+       02_HTML_SETTINGS_PANEL
+       03_HTML_DVD_LOGO
+       04_HTML_MINI_STATS
+       05_HTML_CORNER_MESSAGE
+
+       CSS REGIONS
+       10_CSS_THEME_VARIABLES
+       11_CSS_BASE_PAGE
+       12_CSS_MENU_BUTTON
+       13_CSS_SETTINGS_PANEL
+       14_CSS_FORM_CONTROLS
+       15_CSS_STATS_AND_BADGES
+       16_CSS_DVD_LOGO
+       17_CSS_ANIMATIONS
+       18_CSS_RESPONSIVE
+
+       JS REGIONS
+       20_JS_DOM_REFERENCES
+       21_JS_CONSTANTS_AND_STATE
+       22_JS_LAYOUT_AND_RENDER_HELPERS
+       23_JS_COUNTERS_TITLE_AND_FAVICON
+       24_JS_ANIMATION_ENGINE
+       25_JS_MENU_BEHAVIOR
+       26_JS_FILE_AND_MODE_HANDLERS
+       27_JS_EVENT_LISTENERS
+       28_JS_STARTUP
+
+       SYSTEM SUMMARY
+       ---------------------------------------------------------
+       This is one HTML file that contains:
+       - HTML: the page structure and controls.
+       - CSS: the glass UI theme and visual design.
+       - JavaScript: animation, collisions, counters, favicon,
+         title updates, menu behavior, and file selection.
+
+       Main features:
+       - DVD logo bounces around the screen.
+       - The logo changes color on every wall hit.
+       - Corner hits are counted when both X and Y collide in the
+         same animation frame.
+       - The browser tab title shows the current corner count.
+       - The favicon changes color together with the DVD logo.
+       - A small always-visible counter stays on the screen.
+       - A hidden glass menu appears when the mouse moves upward.
+       - Users can change background image, logo image, speed,
+         pause/resume, reset counters, reset speed, enable Corner
+         Watch, and adjust corner tolerance.
+       - Motion uses delta time, so it behaves consistently across
+         different monitor refresh rates.
+       - Corner tolerance can be increased to count near-corners
+         as corners for a more arcade-like experience.
+       ========================================================= */
+
+    /* #region 10_CSS_THEME_VARIABLES
+       =========================================================
+       Global design tokens.
+       Change these values to quickly restyle the whole page.
+       ========================================================= */
+
+    :root {
+      --bg-1: #060912;
+      --bg-2: #101827;
+
+      --panel-bg: rgba(15, 23, 42, 0.72);
+      --panel-bg-hover: rgba(30, 41, 59, 0.82);
+      --panel-border: rgba(255, 255, 255, 0.15);
+      --panel-border-soft: rgba(255, 255, 255, 0.1);
+
+      --text-main: #f8fafc;
+      --text-muted: rgba(248, 250, 252, 0.68);
+
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.26);
+      --accent-border: rgba(56, 189, 248, 0.56);
+
+      --logo-color: #38bdf8;
+      --custom-bg-image: none;
+
+      --radius-sm: 12px;
+      --radius-md: 18px;
+      --radius-lg: 26px;
+      --radius-pill: 999px;
+
+      --shadow-soft: 0 18px 50px rgba(0, 0, 0, 0.24);
+      --shadow-strong: 0 24px 70px rgba(0, 0, 0, 0.38);
+      --blur-glass: 20px;
+
+      --transition-fast: 0.15s ease;
+      --transition-normal: 0.2s ease;
+      --watch-glow: rgba(250, 204, 21, 0.72);
+    }
+
+    /* #endregion 10_CSS_THEME_VARIABLES */
+
+    /* #region 11_CSS_BASE_PAGE
+       =========================================================
+       Page reset and full-screen background.
+       ========================================================= */
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      color: var(--text-main);
+      font-family:
+        Inter,
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Arial,
+        sans-serif;
+    }
+
+    body {
+      background:
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.14), transparent 34%),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2));
+    }
+
+    body.bg-custom-image {
+      background-image:
+        linear-gradient(rgba(3, 7, 18, 0.28), rgba(3, 7, 18, 0.28)),
+        var(--custom-bg-image);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+
+    /* #endregion 11_CSS_BASE_PAGE */
+
+    /* #region 12_CSS_MENU_BUTTON
+       =========================================================
+       Hidden top-left button.
+       It appears when the mouse moves upward or near the top.
+       ========================================================= */
+
+    .menu-button {
+      position: fixed;
+      top: 18px;
+      left: 18px;
+      z-index: 40;
+      width: 54px;
+      height: 54px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-md);
+      background: rgba(15, 23, 42, 0.58);
+      color: var(--text-main);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: var(--shadow-soft);
+      opacity: 0;
+      translate: 0 -18px;
+      pointer-events: none;
+      cursor: pointer;
+      transition:
+        opacity var(--transition-normal),
+        translate var(--transition-normal),
+        background var(--transition-fast),
+        transform var(--transition-fast);
+      font: inherit;
+      font-size: 1.22rem;
+      font-weight: 900;
+    }
+
+    .menu-button:hover {
+      background: var(--panel-bg-hover);
+      transform: translateY(-1px);
+    }
+
+    .menu-button.visible,
+    .menu-button.menu-open {
+      opacity: 1;
+      translate: 0 0;
+      pointer-events: auto;
+    }
+
+    /* #endregion 12_CSS_MENU_BUTTON */
+
+    /* #region 13_CSS_SETTINGS_PANEL
+       =========================================================
+       Glass settings panel.
+       Holds counters, speed, background, logo, and actions.
+       ========================================================= */
+
+    .settings-panel {
+      position: fixed;
+      top: 86px;
+      left: 18px;
+      z-index: 39;
+      width: min(390px, calc(100vw - 36px));
+      max-height: calc(100vh - 108px);
+      overflow: auto;
+      padding: 18px;
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-lg);
+      background: var(--panel-bg);
+      backdrop-filter: blur(var(--blur-glass));
+      -webkit-backdrop-filter: blur(var(--blur-glass));
+      box-shadow: var(--shadow-strong);
+      opacity: 0;
+      transform: translateY(-12px) scale(0.98);
+      pointer-events: none;
+      transition:
+        opacity var(--transition-normal),
+        transform var(--transition-normal);
+    }
+
+    .settings-panel.open {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .settings-footer {
+      position: sticky;
+      bottom: -18px;
+      z-index: 3;
+      margin: 16px -18px -18px;
+      padding: 12px 18px 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      background: linear-gradient(180deg,
+          rgba(15, 23, 42, 0.72),
+          rgba(15, 23, 42, 0.94));
+      backdrop-filter: blur(var(--blur-glass));
+      -webkit-backdrop-filter: blur(var(--blur-glass));
+    }
+
+    .settings-footer .settings-group-title {
+      margin-bottom: 8px;
+    }
+
+    .settings-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .settings-title {
+      margin: 0 0 4px;
+      font-size: 1.08rem;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+    }
+
+    .settings-subtitle {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 0.86rem;
+      line-height: 1.45;
+    }
+
+    .settings-group {
+      padding: 15px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .settings-group-title {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--text-main);
+      font-size: 0.9rem;
+      font-weight: 900;
+      letter-spacing: -0.01em;
+    }
+
+    .settings-note {
+      margin: 10px 0 0;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+
+    .developer-map {
+      margin-top: 10px;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      line-height: 1.55;
+    }
+
+    .developer-map summary {
+      color: var(--text-main);
+      cursor: pointer;
+      font-weight: 900;
+    }
+
+    .advanced-settings summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 0;
+    }
+
+    .advanced-settings summary::after {
+      content: "open";
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .advanced-settings[open] summary::after {
+      content: "close";
+    }
+
+    .developer-map ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+    }
+
+    .developer-map.debug-mode {
+      border-radius: var(--radius-md);
+    }
+
+    /* #endregion 13_CSS_SETTINGS_PANEL */
+
+    /* #region 14_CSS_FORM_CONTROLS
+       =========================================================
+       Buttons, sliders, segmented controls, and action rows.
+       ========================================================= */
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-main);
+      font: inherit;
+      font-weight: 800;
+      text-align: center;
+      cursor: pointer;
+      transition:
+        transform var(--transition-fast),
+        background var(--transition-fast),
+        outline-color var(--transition-fast);
+    }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.18);
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .close-button {
+      width: 38px;
+      height: 38px;
+      padding: 0;
+      border-radius: var(--radius-sm);
+      flex: 0 0 auto;
+    }
+
+    .segmented-control {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .option-button.active {
+      background: var(--accent-soft);
+      outline: 1px solid var(--accent-border);
+    }
+
+    .file-input {
+      display: none;
+    }
+
+    .speed-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .slider-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .speed-value {
+      min-width: 58px;
+      padding: 7px 9px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+      text-align: center;
+      font-size: 0.84rem;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .speed-reset-button {
+      padding: 7px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 0.78rem;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 22px;
+      appearance: none;
+      -webkit-appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius-pill);
+      background: linear-gradient(90deg,
+          rgba(56, 189, 248, 0.42),
+          rgba(168, 85, 247, 0.28));
+      box-shadow: inset 0 1px 8px rgba(0, 0, 0, 0.28);
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      width: 18px;
+      height: 18px;
+      margin-top: -6px;
+      border: 2px solid rgba(255, 255, 255, 0.82);
+      border-radius: 50%;
+      appearance: none;
+      -webkit-appearance: none;
+      background: var(--accent);
+      box-shadow:
+        0 0 0 5px rgba(56, 189, 248, 0.12),
+        0 6px 16px rgba(0, 0, 0, 0.32);
+    }
+
+    input[type="range"]::-moz-range-track {
+      height: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius-pill);
+      background: linear-gradient(90deg,
+          rgba(56, 189, 248, 0.42),
+          rgba(168, 85, 247, 0.28));
+      box-shadow: inset 0 1px 8px rgba(0, 0, 0, 0.28);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.82);
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow:
+        0 0 0 5px rgba(56, 189, 248, 0.12),
+        0 6px 16px rgba(0, 0, 0, 0.32);
+    }
+
+    .action-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .full-width-button {
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    /* #endregion 14_CSS_FORM_CONTROLS */
+
+    /* #region 15_CSS_STATS_AND_BADGES
+       =========================================================
+       Menu stats cards and small always-visible counter badge.
+       ========================================================= */
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .stat-card {
+      padding: 12px;
+      border: 1px solid var(--panel-border-soft);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.075);
+    }
+
+    .stat-label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--text-muted);
+      font-size: 0.76rem;
+      font-weight: 700;
+    }
+
+    .stat-value {
+      display: block;
+      font-size: 1.35rem;
+      font-weight: 950;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .mini-stats {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 15;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 9px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius-pill);
+      background: rgba(15, 23, 42, 0.48);
+      color: var(--text-muted);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
+      font-size: 0.74rem;
+      font-weight: 800;
+      user-select: none;
+      pointer-events: none;
+    }
+
+    .mini-stats strong {
+      color: var(--text-main);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* #endregion 15_CSS_STATS_AND_BADGES */
+
+    /* #region 16_CSS_DVD_LOGO
+       =========================================================
+       Moving DVD logo.
+       The default SVG changes color. A custom image can replace it.
+       ========================================================= */
+
+    .dvd-logo {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 170px;
+      height: 92px;
+      color: var(--logo-color);
+      filter: drop-shadow(0 0 18px color-mix(in srgb, var(--logo-color), transparent 45%));
+      transform-origin: top left;
+      transition: filter 0.25s ease;
+      will-change: transform, color, filter;
+      user-select: none;
+      pointer-events: none;
+    }
+
+    .dvd-logo.watch-active {
+      z-index: 25;
+      filter:
+        drop-shadow(0 0 18px var(--watch-glow)) drop-shadow(0 0 38px var(--watch-glow));
+    }
+
+    .dvd-logo svg,
+    .dvd-logo img {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .dvd-logo img {
+      object-fit: contain;
+      filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.22));
+    }
+
+    .dvd-logo.custom-logo svg {
+      display: none;
+    }
+
+    .dvd-logo:not(.custom-logo) img {
+      display: none;
+    }
+
+    /* #endregion 16_CSS_DVD_LOGO */
+
+    /* #region 17_CSS_ANIMATIONS
+       =========================================================
+       Small corner hit pulse and corner message fade.
+       ========================================================= */
+
+    .corner-flash {
+      animation: cornerPulse 0.42s ease;
+    }
+
+    @keyframes cornerPulse {
+      0% {
+        filter:
+          drop-shadow(0 0 18px currentColor)
+          drop-shadow(0 0 0 rgba(255, 255, 255, 0));
+      }
+
+      45% {
+        filter:
+          drop-shadow(0 0 26px currentColor)
+          drop-shadow(0 0 18px rgba(255, 255, 255, 0.42));
+      }
+
+      100% {
+        filter:
+          drop-shadow(0 0 18px currentColor)
+          drop-shadow(0 0 0 rgba(255, 255, 255, 0));
+      }
+    }
+
+    .corner-message {
+      position: fixed;
+      left: 50%;
+      bottom: 32px;
+      z-index: 20;
+      translate: -50% 0;
+      padding: 12px 18px;
+      border-radius: var(--radius-pill);
+      background: rgba(15, 23, 42, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: var(--text-main);
+      font-weight: 900;
+      opacity: 0;
+      transform: translateY(18px);
+      transition:
+        opacity 0.24s ease,
+        transform 0.24s ease;
+      pointer-events: none;
+    }
+
+    .corner-message.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* #endregion 17_CSS_ANIMATIONS */
+
+    /* #region 18_CSS_RESPONSIVE
+       =========================================================
+       Small screen adjustments.
+       ========================================================= */
+
+    @media (max-width: 640px) {
+      .menu-button {
+        top: 12px;
+        left: 12px;
+      }
+
+      .settings-panel {
+        top: 76px;
+        left: 12px;
+        width: calc(100vw - 24px);
+        max-height: calc(100vh - 88px);
+      }
+
+      .dvd-logo {
+        width: 132px;
+        height: 72px;
+      }
+
+      .mini-stats {
+        right: 12px;
+        bottom: 12px;
+      }
+    }
+
+    /* #endregion 18_CSS_RESPONSIVE */
+  </style>
+</head>
+
+<body>
+  <!-- #region 01_HTML_MENU_BUTTON
+       =========================================================
+       Top-left menu button.
+       Hidden by default and revealed by mouse movement.
+       ========================================================= -->
+  <button class="menu-button" id="menuButton" type="button" aria-label="Open menu">☰</button>
+  <!-- #endregion 01_HTML_MENU_BUTTON -->
+
+  <!-- #region 02_HTML_SETTINGS_PANEL
+       =========================================================
+       Main settings panel.
+       Contains controls and developer notes.
+       ========================================================= -->
+  <aside class="settings-panel" id="settingsPanel" aria-label="DVD settings menu">
+    <div class="settings-header">
+      <div>
+        <h1 class="settings-title">DVD Controls</h1>
+        <p class="settings-subtitle">Customize the animation, replace images, and track corner hits.</p>
+      </div>
+      <button class="close-button" id="closeMenuButton" type="button" aria-label="Close menu">✕</button>
+    </div>
+
+    <div class="settings-group">
+      <span class="settings-group-title">Stats & Probability</span>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-label">Wall hits</span>
+          <span class="stat-value" id="wallHitsText">0</span>
+        </div>
+
+        <div class="stat-card">
+          <span class="stat-label">Corner hits</span>
+          <span class="stat-value" id="cornerHitsText">0</span>
+        </div>
+
+        <div class="stat-card">
+          <span class="stat-label">Chance / wall hit</span>
+          <span class="stat-value" id="probabilityText">≈0%</span>
+        </div>
+
+        <div class="stat-card">
+          <span class="stat-label">Expected hits</span>
+          <span class="stat-value" id="expectedHitsText">∞</span>
+        </div>
+      </div>
+      <p class="settings-note" id="playfieldText">Playfield: calculating...</p>
+    </div>
+
+    <div class="settings-group">
+      <span class="settings-group-title">Speed</span>
+      <div class="speed-row">
+        <input id="speedSlider" type="range" min="0.1" max="20" step="0.1" value="1" aria-label="DVD speed" />
+        <span class="speed-value" id="speedValueText">1.00x</span>
+        <button class="speed-reset-button" id="resetSpeedButton" type="button">1x</button>
+      </div>
+      <p class="settings-note">The animation uses delta time, so the same speed feels consistent across different
+        refresh rates.</p>
+    </div>
+
+    <div class="settings-group">
+      <span class="settings-group-title">Corner Watch</span>
+      <div class="action-row">
+        <button id="cornerWatchButton" type="button">Highlight: Off</button>
+      </div>
+      <p class="settings-note">Highlight only arms cinematic mode. The advanced trigger controls decide when it actually
+        slows down.</p>
+    </div>
+
+    <div class="settings-group">
+      <details class="compact-details">
+        <summary>Appearance</summary>
+        <div class="compact-details-body">
+          <span class="settings-group-title">Background</span>
+          <div class="segmented-control">
+            <button class="option-button active" id="defaultBgButton" type="button">Default</button>
+            <button class="option-button" id="imageBgButton" type="button">Image</button>
+          </div>
+          <input class="file-input" id="backgroundInput" type="file" accept="image/*" />
+          <p class="settings-note">Click Image to choose a local background file. Nothing is uploaded.</p>
+
+          <span class="settings-group-title" style="margin-top: 16px;">Logo</span>
+          <div class="segmented-control">
+            <button class="option-button active" id="defaultLogoButton" type="button">Default SVG</button>
+            <button class="option-button" id="customLogoButton" type="button">Image</button>
+          </div>
+          <input class="file-input" id="logoInput" type="file" accept="image/*" />
+
+          <div class="slider-row" style="margin-top: 12px;">
+            <input id="dvdSizeSlider" type="range" min="0.5" max="3" step="0.05" value="1" aria-label="DVD logo size" />
+            <span class="speed-value" id="dvdSizeText">1.00x</span>
+          </div>
+          <p class="settings-note">Logo size changes the real DVD element size, so collisions and probabilities update
+            with it. The default SVG now uses tighter bounds so the visible icon reaches the walls more accurately.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="settings-group">
+      <details class="developer-map advanced-settings">
+        <summary>Advanced Settings</summary>
+
+        <p class="settings-note">These controls are mostly for tuning and debugging the cinematic corner behavior.</p>
+
+        <div class="slider-row" style="margin-top: 12px;">
+          <input id="highlightDistanceSlider" type="range" min="10" max="300" step="5" value="80"
+            aria-label="Highlight trigger distance" />
+          <span class="speed-value" id="highlightDistanceText">80px</span>
+        </div>
+        <p class="settings-note">Trigger distance: how close the predicted corner must be before slow motion starts.</p>
+
+        <div class="slider-row" style="margin-top: 12px;">
+          <input id="highlightZoomSlider" type="range" min="1" max="2" step="0.05" value="1"
+            aria-label="Highlight zoom amount" />
+          <span class="speed-value" id="highlightZoomText">1.00x</span>
+        </div>
+        <p class="settings-note">Highlight zoom is optional. 1.00x keeps the DVD stable and avoids visual edge
+          artifacts.</p>
+
+        <div class="slider-row" style="margin-top: 12px;">
+          <input id="cornerToleranceSlider" type="range" min="0" max="64" step="1" value="0"
+            aria-label="Corner tolerance" />
+          <span class="speed-value" id="cornerToleranceText">0px</span>
+        </div>
+        <p class="settings-note">Corner tolerance makes near-corners count. 0px means exact corner mode.</p>
+
+        <div class="action-row" style="margin-top: 12px;">
+          <button id="resetToleranceButton" type="button">Exact 0px</button>
+          <button id="debugCornerButton" type="button">Debug corner shot</button>
+        </div>
+        <button class="full-width-button" id="clearPrefsButton" type="button">Clear saved preferences</button>
+      </details>
+    </div>
+
+    <div class="settings-group">
+      <details class="developer-map">
+        <summary>Developer file map</summary>
+        <ul>
+          <li><strong>HTML</strong>: menu button, settings panel, DVD logo, mini stats, corner message.</li>
+          <li><strong>CSS</strong>: theme variables, glass UI, controls, badges, DVD logo, animations, responsive
+            layout.</li>
+          <li><strong>JavaScript</strong>: DOM references, state, delta-time animation, collisions, corner prediction,
+            counters, title, favicon, menu behavior, image loading.</li>
+          <li><strong>Corner math</strong>: true corner hits are rare because both axes must reach a boundary at the
+            same time.</li>
+          <li><strong>Debug module</strong>: Debug Corner Shot only sets position and direction; it does not override physics.</li>
+        </ul>
+      </details>
+    </div>
+
+    <div class="settings-footer">
+      <span class="settings-group-title">Actions</span>
+      <div class="action-row">
+        <button id="pauseButton" type="button">Pause</button>
+        <button id="resetButton" type="button">Reset</button>
+      </div>
+    </div>
+  </aside>
+  <!-- #endregion 02_HTML_SETTINGS_PANEL -->
+
+  <!-- #region 03_HTML_DVD_LOGO
+       =========================================================
+       Moving logo.
+       Contains both the default SVG and an optional custom image.
+       JavaScript toggles between them.
+       ========================================================= -->
+  <div class="dvd-logo" id="dvdLogo" aria-hidden="true">
+    <svg viewBox="22 24 256 132" role="img">
+      <defs>
+        <linearGradient id="shine" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stop-color="currentColor" stop-opacity="1" />
+          <stop offset="100%" stop-color="currentColor" stop-opacity="0.62" />
+        </linearGradient>
+      </defs>
+
+      <ellipse cx="150" cy="126" rx="118" ry="23" fill="none" stroke="currentColor" stroke-width="12" opacity="0.95" />
+      <text x="150" y="92" text-anchor="middle" font-family="Arial Black, Impact, sans-serif" font-size="72"
+        font-weight="900" fill="url(#shine)" letter-spacing="-5">DVD</text>
+      <text x="150" y="143" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" font-weight="900"
+        fill="currentColor" letter-spacing="9" opacity="0.82">VIDEO</text>
+    </svg>
+
+    <img id="customLogoImage" alt="Custom DVD logo" />
+  </div>
+  <!-- #endregion 03_HTML_DVD_LOGO -->
+
+  <!-- #region 04_HTML_MINI_STATS
+       =========================================================
+       Small always-visible counter badge.
+       ========================================================= -->
+  <div class="mini-stats" aria-label="DVD hit counters">
+    <span>Walls: <strong id="miniWallHitsText">0</strong></span>
+    <span>•</span>
+    <span>Corners: <strong id="miniCornerHitsText">0</strong></span>
+  </div>
+  <!-- #endregion 04_HTML_MINI_STATS -->
+
+  <!-- #region 05_HTML_CORNER_MESSAGE
+       =========================================================
+       Short visual feedback when a corner hit happens.
+       ========================================================= -->
+  <div class="corner-message" id="cornerMessage">Corner hit!</div>
+  <!-- #endregion 05_HTML_CORNER_MESSAGE -->
+
+  <script>
+    /* =========================================================
+       JS MAP
+       ---------------------------------------------------------
+       20_DOM_REFERENCES:
+         Connects JavaScript to important HTML elements.
+
+       21_CONSTANTS_AND_STATE:
+         Stores animation values, counters, menu state, and colors.
+
+       22_LAYOUT_AND_RENDER_HELPERS:
+         Handles bounds, speed display, active buttons, and window resize.
+
+       23_COUNTERS_TITLE_AND_FAVICON:
+         Updates counters, browser title, favicon, and visual feedback.
+
+       24_ANIMATION_ENGINE:
+         Runs the delta-time animation and wall/corner collision logic.
+
+       25_MENU_BEHAVIOR:
+         Reveals the menu button and opens/closes the glass panel.
+
+       26_FILE_AND_MODE_HANDLERS:
+         Reads local image files and switches background/logo modes.
+
+       27_EVENT_LISTENERS:
+         Wires user actions to functions.
+
+       28_STARTUP:
+         Initializes the page.
+       ========================================================= */
+
+    // #region 20_JS_DOM_REFERENCES
+    /* =========================================================
+       DOM REFERENCES
+       ---------------------------------------------------------
+       These constants store references to HTML elements.
+       This avoids repeated document.getElementById calls and makes
+       the rest of the code cleaner.
+
+       Time Complexity:  O(1) per lookup
+       Space Complexity: O(1)
+       ========================================================= */
+
+    const dvdLogo = document.getElementById("dvdLogo");
+    const customLogoImage = document.getElementById("customLogoImage");
+    const faviconLink = document.getElementById("faviconLink");
+
+    const wallHitsText = document.getElementById("wallHitsText");
+    const cornerHitsText = document.getElementById("cornerHitsText");
+    const miniWallHitsText = document.getElementById("miniWallHitsText");
+    const miniCornerHitsText = document.getElementById("miniCornerHitsText");
+
+    const speedSlider = document.getElementById("speedSlider");
+    const speedValueText = document.getElementById("speedValueText");
+    const resetSpeedButton = document.getElementById("resetSpeedButton");
+    const highlightDistanceSlider = document.getElementById("highlightDistanceSlider");
+    const highlightDistanceText = document.getElementById("highlightDistanceText");
+    const highlightZoomSlider = document.getElementById("highlightZoomSlider");
+    const highlightZoomText = document.getElementById("highlightZoomText");
+    const dvdSizeSlider = document.getElementById("dvdSizeSlider");
+    const dvdSizeText = document.getElementById("dvdSizeText");
+
+    const cornerWatchButton = document.getElementById("cornerWatchButton");
+    const resetToleranceButton = document.getElementById("resetToleranceButton");
+    const cornerToleranceSlider = document.getElementById("cornerToleranceSlider");
+    const cornerToleranceText = document.getElementById("cornerToleranceText");
+    const debugCornerButton = document.getElementById("debugCornerButton");
+    const clearPrefsButton = document.getElementById("clearPrefsButton");
+
+    const probabilityText = document.getElementById("probabilityText");
+    const expectedHitsText = document.getElementById("expectedHitsText");
+    const playfieldText = document.getElementById("playfieldText");
+
+    const pauseButton = document.getElementById("pauseButton");
+    const resetButton = document.getElementById("resetButton");
+    const cornerMessage = document.getElementById("cornerMessage");
+
+    const menuButton = document.getElementById("menuButton");
+    const settingsPanel = document.getElementById("settingsPanel");
+    const closeMenuButton = document.getElementById("closeMenuButton");
+
+    const defaultBgButton = document.getElementById("defaultBgButton");
+    const imageBgButton = document.getElementById("imageBgButton");
+    const backgroundInput = document.getElementById("backgroundInput");
+
+    const defaultLogoButton = document.getElementById("defaultLogoButton");
+    const customLogoButton = document.getElementById("customLogoButton");
+    const logoInput = document.getElementById("logoInput");
+
+    // #endregion 20_JS_DOM_REFERENCES
+
+    // #region 21_JS_CONSTANTS_AND_STATE
+    /* =========================================================
+       CONSTANTS AND STATE
+       ---------------------------------------------------------
+       colors:
+         Palette for the default SVG logo and favicon.
+
+       x, y:
+         Current logo position in pixels.
+
+       vx, vy:
+         Velocity in pixels per second.
+         This matters because we use delta time.
+
+       speedMultiplier:
+         Controlled by the speed slider.
+
+       wallHits / cornerHits:
+         Counters for wall and corner collisions.
+
+       lastFrameTime:
+         Stores the previous animation timestamp for delta time.
+       ========================================================= */
+
+    const basePageTitle = "DVD";
+
+    const colors = [
+      "#38bdf8", // sky blue
+      "#a78bfa", // purple
+      "#fb7185", // rose
+      "#facc15", // yellow
+      "#34d399", // green
+      "#f97316", // orange
+      "#22d3ee", // cyan
+      "#e879f9"  // pink
+    ];
+
+    const DEFAULT_DVD_WIDTH = 170;
+    const DEFAULT_DVD_HEIGHT = 92;
+    const DEFAULT_DVD_SIZE_SCALE = 1;
+    const DEFAULT_HIGHLIGHT_DISTANCE_PX = 80;
+    const DEFAULT_HIGHLIGHT_ZOOM_SCALE = 1;
+    const CORNER_WATCH_SLOW_SPEED = 0.18;
+    const EXACT_CORNER_EPSILON_PX = 0.0001;
+    const SHOULD_TINT_CUSTOM_FAVICON = true;
+    const PREFS_STORAGE_KEY = "dvdCornerCounter.preferences.v1";
+
+    let colorIndex = 0;
+    let customLogoDataUrl = null;
+    let customBackgroundDataUrl = null;
+    let currentLogoMode = "default";
+    let currentBackgroundMode = "default";
+    let isLoadingPrefs = false;
+
+    let x = 100;
+    let y = 160;
+    let vx = 180;
+    let vy = 140;
+    let speedMultiplier = 1;
+    let cornerTolerancePx = 0;
+    let highlightDistancePx = DEFAULT_HIGHLIGHT_DISTANCE_PX;
+    let highlightZoomScale = DEFAULT_HIGHLIGHT_ZOOM_SCALE;
+    let dvdSizeScale = DEFAULT_DVD_SIZE_SCALE;
+    let currentLogoScale = 1;
+    let isCornerWatchEnabled = false;
+    let isCornerWatchActive = false;
+    let messageTimeoutId = null;
+
+    let wallHits = 0;
+    let cornerHits = 0;
+    let isPaused = false;
+    let lastFrameTime = null;
+
+    let lastMouseY = window.innerHeight;
+    let hideMenuTimeoutId = null;
+    let isSettingsOpen = false;
+
+    // #endregion 21_JS_CONSTANTS_AND_STATE
+
+    // #region 22_JS_LAYOUT_AND_RENDER_HELPERS
+    /* =========================================================
+       getBounds()
+       ---------------------------------------------------------
+       Returns the maximum allowed x/y position for the logo.
+       We subtract the logo size from the window size so the logo
+       remains fully visible.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function getBounds() {
+      return {
+        maxX: window.innerWidth - dvdLogo.offsetWidth,
+        maxY: window.innerHeight - dvdLogo.offsetHeight
+      };
+    }
+
+    /* =========================================================
+       updateSpeedDisplay()
+       ---------------------------------------------------------
+       Updates the visual speed label next to the slider.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function updateSpeedDisplay() {
+      speedValueText.textContent = `${speedMultiplier.toFixed(2)}x`;
+    }
+
+    /* =========================================================
+       updateHighlightDistanceDisplay()
+       ---------------------------------------------------------
+       Updates the visible Highlight trigger distance label.
+
+       Distance trigger controls how close the DVD must be to the
+       predicted corner before cinematic slow motion begins.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function updateHighlightDistanceDisplay() {
+      highlightDistanceText.textContent = `${Math.round(highlightDistancePx)}px`;
+    }
+
+    /* =========================================================
+       updateHighlightZoomDisplay()
+       ---------------------------------------------------------
+       Updates the visible Highlight zoom label.
+
+       1.00x keeps the logo at its normal size.
+       Higher values enlarge it smoothly during cinematic mode.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function updateHighlightZoomDisplay() {
+      highlightZoomText.textContent = `${highlightZoomScale.toFixed(2)}x`;
+    }
+
+    /* =========================================================
+       updateDvdSizeDisplay()
+       ---------------------------------------------------------
+       Updates the visible DVD size label.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function updateDvdSizeDisplay() {
+      dvdSizeText.textContent = `${dvdSizeScale.toFixed(2)}x`;
+    }
+
+    /* =========================================================
+       applyDvdSize()
+       ---------------------------------------------------------
+       Applies the selected DVD size to the real DOM element.
+       Unlike highlight zoom, this changes the actual element size,
+       so collision bounds and probability calculations update too.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function applyDvdSize() {
+      dvdLogo.style.width = `${Math.round(DEFAULT_DVD_WIDTH * dvdSizeScale)}px`;
+      dvdLogo.style.height = `${Math.round(DEFAULT_DVD_HEIGHT * dvdSizeScale)}px`;
+      updateDvdSizeDisplay();
+      keepLogoInsideWindow();
+      updateCornerProbabilityDisplay();
+    }
+
+    /* =========================================================
+       getScaledRenderPosition(scale)
+       ---------------------------------------------------------
+       Returns a safe render position for the visual transform.
+
+       Why this exists:
+       Collision math uses the real DVD element size. Highlight zoom
+       is only a visual scale. If we render `scale(1.35)` at the exact
+       right/top corner, the visual logo can appear outside the page.
+
+       This helper keeps the scaled visual inside the viewport while
+       preserving the real collision coordinates.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function getScaledRenderPosition(scale) {
+      const scaledWidth = dvdLogo.offsetWidth * scale;
+      const scaledHeight = dvdLogo.offsetHeight * scale;
+
+      return {
+        renderX: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - scaledWidth)),
+        renderY: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - scaledHeight))
+      };
+    }
+
+    /* =========================================================
+       updateCornerToleranceDisplay()
+       ---------------------------------------------------------
+       Updates the visual corner tolerance label.
+
+       0px means true exact-corner mode.
+       Higher values make the counter more forgiving and count
+       near-corners as corner hits.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function updateCornerToleranceDisplay() {
+      cornerToleranceText.textContent = `${cornerTolerancePx}px`;
+      updateCornerProbabilityDisplay();
+    }
+
+    /* =========================================================
+       updateCornerProbabilityDisplay()
+       ---------------------------------------------------------
+       Shows an approximate chance that a wall hit will also count
+       as a corner hit for the current playfield.
+
+       Why approximation?
+       The DVD path is deterministic, not truly random. However,
+       if we treat wall impact positions as roughly distributed
+       along the opposite axis, the chance can be estimated from:
+
+       Vertical wall hit:
+         corner chance ≈ 2 * tolerance / playfieldHeight
+
+       Horizontal wall hit:
+         corner chance ≈ 2 * tolerance / playfieldWidth
+
+       Then we weight these by how often vertical/horizontal wall
+       hits happen according to velocity and playfield size.
+
+       Exact mode:
+       With 0px tolerance, a true mathematical corner requires both
+       axes to hit their boundaries at the same instant, so the
+       general probability is treated as ~0%.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function updateCornerProbabilityDisplay() {
+      const { maxX, maxY } = getBounds();
+      const playfieldWidth = Math.max(maxX, 1);
+      const playfieldHeight = Math.max(maxY, 1);
+      const tolerance = Math.max(cornerTolerancePx, 0);
+
+      playfieldText.textContent = `Playfield: ${Math.round(playfieldWidth)}px × ${Math.round(playfieldHeight)}px • Tolerance: ${tolerance}px`;
+
+      if (tolerance === 0) {
+        probabilityText.textContent = "≈0%";
+        expectedHitsText.textContent = "∞";
+        return;
+      }
+
+      const verticalWallCornerChance = Math.min(1, (2 * tolerance) / playfieldHeight);
+      const horizontalWallCornerChance = Math.min(1, (2 * tolerance) / playfieldWidth);
+
+      const verticalHitRate = Math.abs(vx) / playfieldWidth;
+      const horizontalHitRate = Math.abs(vy) / playfieldHeight;
+      const totalHitRate = verticalHitRate + horizontalHitRate;
+
+      const weightedChance = totalHitRate === 0
+        ? 0
+        : (
+          verticalHitRate * verticalWallCornerChance +
+          horizontalHitRate * horizontalWallCornerChance
+        ) / totalHitRate;
+
+      const percent = weightedChance * 100;
+      probabilityText.textContent = percent < 0.01
+        ? "<0.01%"
+        : `≈${percent.toFixed(2)}%`;
+
+      expectedHitsText.textContent = weightedChance > 0
+        ? `≈${Math.ceil(1 / weightedChance)}`
+        : "∞";
+    }
+    /* =========================================================
+       prepareDebugCornerShot()
+       ---------------------------------------------------------
+       Arms a controlled debug shot toward the top-right corner.
+
+       Important:
+       Debug Corner Shot is intentionally simple and separated from
+       Highlight. It only sets a starting position and direction.
+       The regular movement and collision engine handles the rest.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function prepareDebugCornerShot() {
+      const { maxX, maxY } = getBounds();
+
+      /*
+         DEBUG MODULE — SIMPLE CORNER SHOT
+         -------------------------------------------------------
+         This function does one thing only:
+         it places the DVD on a natural path toward the top-right
+         corner, then lets the normal animation + collision engine
+         do the rest.
+
+         It does NOT:
+         - move the DVD manually
+         - count collisions
+         - override handleWallCollision()
+         - change direction after impact
+
+         Target corner:
+         top-right, so the direction must be:
+           vx > 0  // right
+           vy < 0  // up
+      */
+      vx = Math.abs(vx);
+      vy = -Math.abs(vy);
+
+      /*
+         Pick a safe travel time based on the real playfield.
+         We want the logo to start inside the screen and reach both
+         axes at the same time:
+
+           distanceToRight / |vx| = distanceToTop / |vy|
+
+         Since the speed slider multiplies both axes equally, the
+         path ratio stays valid at every speed.
+      */
+      const absVx = Math.max(Math.abs(vx), 1);
+      const absVy = Math.max(Math.abs(vy), 1);
+
+      const maxTimeByX = maxX / absVx;
+      const maxTimeByY = maxY / absVy;
+
+      const travelTime = Math.max(
+        0.25,
+        Math.min(1.6, maxTimeByX * 0.72, maxTimeByY * 0.72)
+      );
+
+      x = maxX - absVx * travelTime;
+      y = absVy * travelTime;
+
+      x = Math.min(Math.max(0, x), maxX);
+      y = Math.min(Math.max(0, y), maxY);
+
+      /*
+         Highlight is only a watcher.
+         It may slow/mark the incoming corner, but it must not
+         control the debug motion or collision response.
+      */
+      isCornerWatchEnabled = true;
+      isCornerWatchActive = false;
+      currentLogoScale = 1;
+
+      cornerWatchButton.textContent = "Highlight: On";
+      cornerWatchButton.classList.add("active");
+      dvdLogo.classList.remove("watch-active");
+
+      lastFrameTime = null;
+
+      showTemporaryMessage("Debug corner shot armed", 1000);
+    }
+    /* =========================================================
+       moveForcedCornerShot(deltaSeconds, speedMultiplierForFrame)
+       ---------------------------------------------------------
+       Moves the logo directly toward the forced debug target.
+       This is only used for Debug corner shot and prevents the
+       logo from drifting outside the page at low speeds.
+
+       Returns true while forced movement was handled.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    
+
+    
+
+    /* =========================================================
+       setActiveButton(buttons, activeButton)
+       ---------------------------------------------------------
+       Removes the active class from every button in a group,
+       then marks one button as active.
+
+       Time Complexity:  O(n), where n is the number of buttons
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function setActiveButton(buttons, activeButton) {
+      buttons.forEach((button) => button.classList.remove("active"));
+      activeButton.classList.add("active");
+    }
+
+    /* =========================================================
+       keepLogoInsideWindow()
+       ---------------------------------------------------------
+       If the browser window is resized, the logo may end up
+       outside the visible area. This clamps it back inside.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function keepLogoInsideWindow() {
+      const { maxX, maxY } = getBounds();
+      x = Math.min(Math.max(0, x), maxX);
+      y = Math.min(Math.max(0, y), maxY);
+    }
+
+
+    /* =========================================================
+       getCurrentPreferences()
+       ---------------------------------------------------------
+       Collects user-facing preferences that should survive a page
+       refresh. Counters and current position are intentionally not
+       saved because Reset should start a clean run.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(saved image size)
+       ========================================================= */
+
+    function getCurrentPreferences() {
+      return {
+        speedMultiplier,
+        cornerTolerancePx,
+        highlightDistancePx,
+        highlightZoomScale,
+        dvdSizeScale,
+        isCornerWatchEnabled,
+        currentLogoMode,
+        currentBackgroundMode,
+        customLogoDataUrl,
+        customBackgroundDataUrl
+      };
+    }
+
+    /* =========================================================
+       savePreferences()
+       ---------------------------------------------------------
+       Saves preferences to localStorage.
+
+       Notes:
+       - localStorage is limited. Large uploaded background images
+         may be too big to save. In that case, the code keeps the
+         page working and shows a short warning.
+       - This runs only after user changes, not while preferences
+         are being loaded.
+
+       Time Complexity:  O(saved data size)
+       Space Complexity: O(saved data size)
+       ========================================================= */
+
+    function savePreferences() {
+      if (isLoadingPrefs) {
+        return;
+      }
+
+      try {
+        localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(getCurrentPreferences()));
+      } catch (error) {
+        showTemporaryMessage("Could not save preferences: image may be too large", 1800);
+      }
+    }
+
+    /* =========================================================
+       loadPreferences()
+       ---------------------------------------------------------
+       Loads saved preferences from localStorage and applies them
+       to state, controls, selected images, and selected modes.
+
+       Time Complexity:  O(saved data size)
+       Space Complexity: O(saved data size)
+       ========================================================= */
+
+    function loadPreferences() {
+      const rawPrefs = localStorage.getItem(PREFS_STORAGE_KEY);
+
+      if (!rawPrefs) {
+        return;
+      }
+
+      try {
+        isLoadingPrefs = true;
+        const prefs = JSON.parse(rawPrefs);
+
+        speedMultiplier = Number(prefs.speedMultiplier ?? speedMultiplier);
+        speedSlider.value = String(speedMultiplier);
+
+        cornerTolerancePx = Number(prefs.cornerTolerancePx ?? cornerTolerancePx);
+        cornerToleranceSlider.value = String(cornerTolerancePx);
+
+        highlightDistancePx = Number(prefs.highlightDistancePx ?? highlightDistancePx);
+        highlightDistanceSlider.value = String(highlightDistancePx);
+
+        highlightZoomScale = Number(prefs.highlightZoomScale ?? highlightZoomScale);
+        highlightZoomSlider.value = String(highlightZoomScale);
+
+        dvdSizeScale = Number(prefs.dvdSizeScale ?? dvdSizeScale);
+        dvdSizeSlider.value = String(dvdSizeScale);
+
+        isCornerWatchEnabled = Boolean(prefs.isCornerWatchEnabled);
+        cornerWatchButton.textContent = isCornerWatchEnabled ? "Highlight: On" : "Highlight: Off";
+        cornerWatchButton.classList.toggle("active", isCornerWatchEnabled);
+
+        customLogoDataUrl = prefs.customLogoDataUrl || null;
+        customBackgroundDataUrl = prefs.customBackgroundDataUrl || null;
+        currentLogoMode = prefs.currentLogoMode || "default";
+        currentBackgroundMode = prefs.currentBackgroundMode || "default";
+
+        if (customLogoDataUrl) {
+          customLogoImage.src = customLogoDataUrl;
+        }
+
+        if (customBackgroundDataUrl) {
+          document.documentElement.style.setProperty("--custom-bg-image", `url("${customBackgroundDataUrl}")`);
+        }
+
+        setBackgroundMode(currentBackgroundMode === "image" && customBackgroundDataUrl ? "image" : "default");
+        setLogoMode(currentLogoMode === "custom" && customLogoDataUrl ? "custom" : "default");
+      } catch (error) {
+        localStorage.removeItem(PREFS_STORAGE_KEY);
+      } finally {
+        isLoadingPrefs = false;
+      }
+    }
+
+    /* =========================================================
+       clearSavedPreferences()
+       ---------------------------------------------------------
+       Removes saved preferences and restores default UI settings.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function clearSavedPreferences() {
+      localStorage.removeItem(PREFS_STORAGE_KEY);
+      customLogoDataUrl = null;
+      customBackgroundDataUrl = null;
+      currentLogoMode = "default";
+      currentBackgroundMode = "default";
+      speedMultiplier = 1;
+      cornerTolerancePx = 0;
+      highlightDistancePx = DEFAULT_HIGHLIGHT_DISTANCE_PX;
+      highlightZoomScale = DEFAULT_HIGHLIGHT_ZOOM_SCALE;
+      dvdSizeScale = DEFAULT_DVD_SIZE_SCALE;
+      isCornerWatchEnabled = false;
+      isCornerWatchActive = false;
+
+      speedSlider.value = "1";
+      cornerToleranceSlider.value = "0";
+      highlightDistanceSlider.value = String(DEFAULT_HIGHLIGHT_DISTANCE_PX);
+      highlightZoomSlider.value = String(DEFAULT_HIGHLIGHT_ZOOM_SCALE);
+      dvdSizeSlider.value = String(DEFAULT_DVD_SIZE_SCALE);
+      cornerWatchButton.textContent = "Highlight: Off";
+      cornerWatchButton.classList.remove("active");
+
+      setBackgroundMode("default");
+      setLogoMode("default");
+      applyDvdSize();
+      updateSpeedDisplay();
+      updateHighlightDistanceDisplay();
+      updateHighlightZoomDisplay();
+      updateCornerToleranceDisplay();
+      updateFavicon(colors[colorIndex]);
+      showTemporaryMessage("Saved preferences cleared", 1200);
+    }
+
+    // #endregion 22_JS_LAYOUT_AND_RENDER_HELPERS
+
+    // #region 23_JS_COUNTERS_TITLE_AND_FAVICON
+    /* =========================================================
+       updatePageTitle()
+       ---------------------------------------------------------
+       Updates the browser tab title with the current corner count.
+
+       Example:
+         DVD • Corners: 7
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function updatePageTitle() {
+      document.title = `${basePageTitle} • Corners: ${cornerHits}`;
+    }
+
+    /* =========================================================
+       updateFavicon(color)
+       ---------------------------------------------------------
+       Rebuilds the tab favicon as a tiny SVG Data URL.
+       This lets the favicon follow the same color as the DVD logo.
+
+       Browser note:
+       Modern Chrome, Edge, and Firefox support dynamic favicon
+       updates well. Some older browsers may cache favicons more
+       aggressively.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function setFaviconHref(href, type = "image/png") {
+      /*
+       * Some browsers are stubborn with favicons.
+       * Replacing the <link> element is more reliable than only changing href.
+       *
+       * Time Complexity:  O(1)
+       * Space Complexity: O(1)
+       */
+      const nextFaviconLink = document.createElement("link");
+      nextFaviconLink.id = "faviconLink";
+      nextFaviconLink.rel = "icon";
+      nextFaviconLink.type = type;
+      nextFaviconLink.href = href;
+
+      const currentFaviconLink = document.getElementById("faviconLink");
+      currentFaviconLink.replaceWith(nextFaviconLink);
+    }
+
+    function getFaviconLink() {
+      /*
+       * Returns the current favicon link after possible replacement.
+       *
+       * Time Complexity:  O(1)
+       * Space Complexity: O(1)
+       */
+      return document.getElementById("faviconLink");
+    }
+
+    function updateFavicon(color) {
+      if (customLogoDataUrl && dvdLogo.classList.contains("custom-logo")) {
+        updateCustomImageFavicon(color);
+        return;
+      }
+
+      const svgIcon = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+          <rect width="64" height="64" rx="16" fill="#060912"/>
+          <ellipse cx="32" cy="43" rx="22" ry="6" fill="none" stroke="${color}" stroke-width="4"/>
+          <text x="32" y="35" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="17" font-weight="900" fill="${color}">DVD</text>
+        </svg>
+      `;
+
+      getFaviconLink().href = `data:image/svg+xml,${encodeURIComponent(svgIcon)}`;
+    }
+
+    /* =========================================================
+       updateCustomImageFavicon(color)
+       ---------------------------------------------------------
+       Uses the uploaded custom logo as the browser tab favicon.
+
+       Important:
+       Browsers support PNG favicons. We do not need to convert the
+       uploaded image to .ico. We draw the image into a 64x64 canvas,
+       optionally tint only the logo pixels, then use the canvas PNG
+       Data URL as the favicon.
+
+       Why this fixes the old version:
+       The old canvas flow painted a dark background first, then used
+       source-atop. That made the entire 64x64 square become tinted.
+       This version draws/tints the logo first, then places the dark
+       background behind it with destination-over.
+
+       Best result:
+       Transparent PNG logos work best. JPG files have no transparency,
+       so the whole image rectangle can still appear as a square.
+
+       Time Complexity:  O(image pixels), fixed 64x64 output
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function updateCustomImageFavicon(color) {
+      const iconImage = new Image();
+
+      iconImage.addEventListener("load", () => {
+        const size = 64;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+
+        const context = canvas.getContext("2d");
+        context.clearRect(0, 0, size, size);
+
+        const scale = Math.min(size / iconImage.width, size / iconImage.height) * 0.82;
+        const drawWidth = iconImage.width * scale;
+        const drawHeight = iconImage.height * scale;
+        const drawX = (size - drawWidth) / 2;
+        const drawY = (size - drawHeight) / 2;
+
+        // 1. Draw only the uploaded logo first.
+        context.drawImage(iconImage, drawX, drawY, drawWidth, drawHeight);
+
+        // 2. Tint only the visible pixels of the uploaded logo.
+        if (SHOULD_TINT_CUSTOM_FAVICON) {
+          context.globalCompositeOperation = "source-in";
+          context.fillStyle = color;
+          context.fillRect(0, 0, size, size);
+          context.globalCompositeOperation = "source-over";
+        }
+
+        // 3. Put the dark favicon background behind the logo.
+        context.globalCompositeOperation = "destination-over";
+        context.fillStyle = "#060912";
+        context.fillRect(0, 0, size, size);
+        context.globalCompositeOperation = "source-over";
+
+        setFaviconHref(canvas.toDataURL("image/png"), "image/png");
+      });
+
+      iconImage.src = customLogoDataUrl;
+    }
+
+    /* =========================================================
+       updateStats()
+       ---------------------------------------------------------
+       Updates:
+       - stats inside the menu
+       - small always-visible stats badge
+       - browser tab title
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function updateStats() {
+      wallHitsText.textContent = wallHits;
+      cornerHitsText.textContent = cornerHits;
+      miniWallHitsText.textContent = wallHits;
+      miniCornerHitsText.textContent = cornerHits;
+      updatePageTitle();
+    }
+
+    /* =========================================================
+       changeLogoColor()
+       ---------------------------------------------------------
+       Moves to the next color in the palette.
+       Updates both:
+       - the default SVG logo color
+       - the browser favicon color
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function changeLogoColor() {
+      colorIndex = (colorIndex + 1) % colors.length;
+      document.documentElement.style.setProperty("--logo-color", colors[colorIndex]);
+      updateFavicon(colors[colorIndex]);
+    }
+
+    /* =========================================================
+       showCornerHitEffect()
+       ---------------------------------------------------------
+       Plays a short pulse effect on the logo and shows a temporary
+       corner message.
+
+       The line `void dvdLogo.offsetWidth` forces the browser to
+       recalculate layout, which restarts the CSS animation cleanly.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function showTemporaryMessage(text, durationMs = 700) {
+      window.clearTimeout(messageTimeoutId);
+      cornerMessage.textContent = text;
+      cornerMessage.classList.add("show");
+
+      messageTimeoutId = window.setTimeout(() => {
+        cornerMessage.classList.remove("show");
+      }, durationMs);
+    }
+
+    /* =========================================================
+       showCornerHitEffect()
+       ---------------------------------------------------------
+       Plays a short pulse effect on the logo and shows a temporary
+       corner message.
+
+       The line `void dvdLogo.offsetWidth` forces the browser to
+       recalculate layout, which restarts the CSS animation cleanly.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function showCornerHitEffect() {
+      dvdLogo.classList.remove("corner-flash");
+      void dvdLogo.offsetWidth;
+      dvdLogo.classList.add("corner-flash");
+
+      showTemporaryMessage("Corner hit!", 900);
+    }
+
+    // #endregion 23_JS_COUNTERS_TITLE_AND_FAVICON
+
+    // #region 24_JS_ANIMATION_ENGINE
+    /* =========================================================
+       handleWallCollision()
+       ---------------------------------------------------------
+       Checks if the logo touched the screen boundaries.
+
+       Vertical wall hit:
+         x <= 0 or x >= maxX
+         We reverse vx.
+
+       Horizontal wall hit:
+         y <= 0 or y >= maxY
+         We reverse vy.
+
+       Corner hit:
+         Happens when both vertical and horizontal collisions occur
+         in the same animation frame.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function handleWallCollision() {
+      const { maxX, maxY } = getBounds();
+
+      let hitVerticalWall = false;
+      let hitHorizontalWall = false;
+
+      if (x <= 0) {
+        x = 0;
+        vx = Math.abs(vx);
+        hitVerticalWall = true;
+      } else if (x >= maxX) {
+        x = maxX;
+        vx = -Math.abs(vx);
+        hitVerticalWall = true;
+      }
+
+      if (y <= 0) {
+        y = 0;
+        vy = Math.abs(vy);
+        hitHorizontalWall = true;
+      } else if (y >= maxY) {
+        y = maxY;
+        vy = -Math.abs(vy);
+        hitHorizontalWall = true;
+      }
+
+      const hitAnyWall = hitVerticalWall || hitHorizontalWall;
+
+      const nearHorizontalEdge = Math.min(y, maxY - y) <= cornerTolerancePx;
+      const nearVerticalEdge = Math.min(x, maxX - x) <= cornerTolerancePx;
+
+      const hitExactCorner = hitVerticalWall && hitHorizontalWall;
+      const hitNearCorner = cornerTolerancePx > 0 && (
+        (hitVerticalWall && nearHorizontalEdge) ||
+        (hitHorizontalWall && nearVerticalEdge)
+      );
+
+      const hitCorner = hitExactCorner || hitNearCorner;
+
+      if (hitAnyWall) {
+        wallHits++;
+        changeLogoColor();
+      }
+
+      if (hitCorner) {
+        cornerHits++;
+        showCornerHitEffect();
+      }
+
+      if (hitAnyWall) {
+        updateStats();
+      }
+    }
+
+    /* =========================================================
+       getUpcomingCornerPrediction()
+       ---------------------------------------------------------
+       Predicts whether the current path is heading into a corner.
+
+       This version is distance-based:
+       - We calculate time until the next vertical wall hit.
+       - We calculate time until the next horizontal wall hit.
+       - If the two times are close enough, the path is considered
+         a corner / near-corner path.
+       - We then estimate the remaining path distance to that
+         corner-like impact.
+
+       Highlight uses distanceToCorner instead of lead time.
+       This makes the cinematic trigger feel much more consistent
+       across different speeds and refresh rates.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function getUpcomingCornerPrediction() {
+      const { maxX, maxY } = getBounds();
+
+      const normalSpeed = Math.max(speedMultiplier, 0.001);
+      const scaledVx = vx * normalSpeed;
+      const scaledVy = vy * normalSpeed;
+
+      const absVx = Math.max(Math.abs(scaledVx), 0.001);
+      const absVy = Math.max(Math.abs(scaledVy), 0.001);
+
+      const timeToVertical = vx > 0 ? (maxX - x) / absVx : x / absVx;
+      const timeToHorizontal = vy > 0 ? (maxY - y) / absVy : y / absVy;
+
+      const impactTime = Math.min(timeToVertical, timeToHorizontal);
+      const timeDifference = Math.abs(timeToVertical - timeToHorizontal);
+
+      const toleranceTimeFromX = cornerTolerancePx / absVx;
+      const toleranceTimeFromY = cornerTolerancePx / absVy;
+      const toleranceTimeWindow = Math.max(toleranceTimeFromX, toleranceTimeFromY);
+
+      /*
+         Small frame window catches exact frame-based collisions even
+         when tolerance is 0px. This keeps Highlight aligned with the
+         real handleWallCollision() behavior.
+      */
+      const frameTimeWindow = 0.022;
+      const allowedTimeDifference = cornerTolerancePx > 0
+        ? toleranceTimeWindow + frameTimeWindow
+        : frameTimeWindow;
+
+      const willCountAsCorner = timeDifference <= allowedTimeDifference;
+      const pathSpeed = Math.hypot(scaledVx, scaledVy);
+      const distanceToCorner = pathSpeed * impactTime;
+
+      return {
+        willCountAsCorner,
+        impactTime,
+        timeDifference,
+        distanceToCorner
+      };
+    }
+
+    /* =========================================================
+       updateCornerWatchState()
+       ---------------------------------------------------------
+       Enables or disables the visual Corner Watch state.
+       When active:
+       - the logo becomes larger
+       - the logo gets a stronger glow
+       - movement temporarily uses slow motion
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function updateCornerWatchState() {
+      const prediction = getUpcomingCornerPrediction();
+      const currentPathSpeed = Math.hypot(vx * speedMultiplier, vy * speedMultiplier);
+      const frameSafetyDistance = currentPathSpeed * (1 / 60) * 1.5;
+      const effectiveTriggerDistance = Math.max(highlightDistancePx, frameSafetyDistance);
+
+      const shouldActivate =
+        isCornerWatchEnabled &&
+        prediction.willCountAsCorner &&
+        prediction.distanceToCorner <= effectiveTriggerDistance;
+
+      if (shouldActivate && !isCornerWatchActive) {
+        showTemporaryMessage("Highlight: incoming corner!", 1000);
+      }
+
+      isCornerWatchActive = shouldActivate;
+      dvdLogo.classList.toggle("watch-active", isCornerWatchActive);
+    }
+
+    /* =========================================================
+       animate(timestamp)
+       ---------------------------------------------------------
+       Main animation loop.
+
+       Why delta time?
+       requestAnimationFrame runs at the monitor refresh rate.
+       Without delta time, a 144Hz monitor would update more times
+       per second than a 60Hz monitor, making the logo move faster.
+
+       deltaSeconds = real time passed since the previous frame.
+       Therefore:
+         movement = velocity * speedMultiplier * deltaSeconds
+
+       The Math.min(..., 0.05) clamp prevents a huge jump after the
+       tab was inactive or the browser paused rendering.
+
+       Time Complexity per frame:  O(1)
+       Space Complexity per frame: O(1)
+       ========================================================= */
+
+    function animate(timestamp) {
+      if (lastFrameTime === null) {
+        lastFrameTime = timestamp;
+      }
+
+      const deltaSeconds = Math.min((timestamp - lastFrameTime) / 1000, 0.05);
+      lastFrameTime = timestamp;
+
+      if (!isPaused) {
+        updateCornerWatchState();
+
+        /*
+           Highlight module:
+           only changes cinematic speed/glow/optional visual zoom.
+           It never changes direction and never handles collision.
+        */
+        const effectiveSpeedMultiplier = isCornerWatchActive
+          ? CORNER_WATCH_SLOW_SPEED
+          : speedMultiplier;
+
+        const targetLogoScale = isCornerWatchActive ? highlightZoomScale : 1;
+        const scaleSmoothness = Math.min(1, deltaSeconds * 8);
+        currentLogoScale += (targetLogoScale - currentLogoScale) * scaleSmoothness;
+
+        /*
+           Physics module:
+           one simple movement path for both normal mode and debug mode.
+           Debug Corner Shot only sets x/y/vx/vy before this loop.
+        */
+        x += vx * effectiveSpeedMultiplier * deltaSeconds;
+        y += vy * effectiveSpeedMultiplier * deltaSeconds;
+
+        handleWallCollision();
+
+        const renderBounds = getScaledRenderPosition(currentLogoScale);
+        dvdLogo.style.transform = `translate(${renderBounds.renderX}px, ${renderBounds.renderY}px) scale(${currentLogoScale})`;
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    /* =========================================================
+       resetAnimation()
+       ---------------------------------------------------------
+       Resets:
+       - position
+       - direction
+       - wall counter
+       - corner counter
+       - color index
+       - favicon color
+       - page title
+
+       It keeps:
+       - selected speed
+       - selected background
+       - selected logo mode
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function resetAnimation() {
+      x = Math.round(window.innerWidth * 0.18);
+      y = Math.round(window.innerHeight * 0.26);
+      vx = 180;
+      vy = 140;
+      wallHits = 0;
+      cornerHits = 0;
+      colorIndex = 0;
+      currentLogoScale = 1;
+      isCornerWatchActive = false;
+      dvdLogo.classList.remove("watch-active");
+
+      document.documentElement.style.setProperty("--logo-color", colors[colorIndex]);
+      updateFavicon(colors[colorIndex]);
+      updateStats();
+    }
+
+    // #endregion 24_JS_ANIMATION_ENGINE
+
+    // #region 25_JS_MENU_BEHAVIOR
+    /* =========================================================
+       showMenuButton()
+       ---------------------------------------------------------
+       Makes the menu button visible.
+       If the settings panel is closed, the button hides after a
+       short delay.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function showMenuButton() {
+      menuButton.classList.add("visible");
+
+      window.clearTimeout(hideMenuTimeoutId);
+
+      hideMenuTimeoutId = window.setTimeout(() => {
+        if (!isSettingsOpen) {
+          menuButton.classList.remove("visible");
+        }
+      }, 1800);
+    }
+
+    /* =========================================================
+       handleMouseReveal(event)
+       ---------------------------------------------------------
+       Reveals the menu button when:
+       1. The cursor is close to the top of the screen.
+       2. The cursor is moving upward in the upper screen area.
+
+       This keeps the page clean while still making the menu easy
+       to access.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function handleMouseReveal(event) {
+      const currentY = event.clientY;
+      const isNearTop = currentY <= 96;
+      const isMovingUp = currentY < lastMouseY;
+      const isUpperArea = currentY <= 220;
+
+      if (isNearTop || (isMovingUp && isUpperArea)) {
+        showMenuButton();
+      }
+
+      lastMouseY = currentY;
+    }
+
+    /* =========================================================
+       toggleSettingsPanel()
+       ---------------------------------------------------------
+       Opens or closes the glass settings panel.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function toggleSettingsPanel() {
+      isSettingsOpen = !isSettingsOpen;
+      settingsPanel.classList.toggle("open", isSettingsOpen);
+      menuButton.classList.toggle("menu-open", isSettingsOpen);
+
+      if (isSettingsOpen) {
+        showMenuButton();
+      }
+    }
+
+    /* =========================================================
+       closeSettingsPanel()
+       ---------------------------------------------------------
+       Closes the glass settings panel.
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function closeSettingsPanel() {
+      isSettingsOpen = false;
+      settingsPanel.classList.remove("open");
+      menuButton.classList.remove("menu-open");
+    }
+
+    // #endregion 25_JS_MENU_BEHAVIOR
+
+    // #region 26_JS_FILE_AND_MODE_HANDLERS
+    /* =========================================================
+       readImageFile(file, onReady)
+       ---------------------------------------------------------
+       Reads a local image file as a Data URL.
+       This lets the browser preview the selected image directly
+       without uploading it anywhere.
+
+       Time Complexity:  O(file size)
+       Space Complexity: O(file size)
+       ========================================================= */
+
+    function readImageFile(file, onReady) {
+      if (!file || !file.type.startsWith("image/")) {
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.addEventListener("load", () => {
+        onReady(reader.result);
+      });
+
+      reader.readAsDataURL(file);
+    }
+
+    /* =========================================================
+       setBackgroundMode(mode)
+       ---------------------------------------------------------
+       Switches between:
+       - default generated CSS background
+       - custom local image background
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function setBackgroundMode(mode) {
+      document.body.classList.remove("bg-custom-image");
+      currentBackgroundMode = mode;
+
+      if (mode === "default") {
+        setActiveButton([defaultBgButton, imageBgButton], defaultBgButton);
+      }
+
+      if (mode === "image") {
+        document.body.classList.add("bg-custom-image");
+        setActiveButton([defaultBgButton, imageBgButton], imageBgButton);
+      }
+
+      savePreferences();
+    }
+
+    /* =========================================================
+       setLogoMode(mode)
+       ---------------------------------------------------------
+       Switches between:
+       - built-in SVG DVD logo
+       - custom local image logo
+
+       Time Complexity:  O(1)
+       Space Complexity: O(1)
+       ========================================================= */
+
+    function setLogoMode(mode) {
+      currentLogoMode = mode;
+
+      if (mode === "default") {
+        dvdLogo.classList.remove("custom-logo");
+        setActiveButton([defaultLogoButton, customLogoButton], defaultLogoButton);
+      }
+
+      if (mode === "custom") {
+        dvdLogo.classList.add("custom-logo");
+        setActiveButton([defaultLogoButton, customLogoButton], customLogoButton);
+      }
+
+      savePreferences();
+    }
+
+    // #endregion 26_JS_FILE_AND_MODE_HANDLERS
+
+    // #region 27_JS_EVENT_LISTENERS
+    /* =========================================================
+       EVENT LISTENERS
+       ---------------------------------------------------------
+       Connects user interactions to the correct functions.
+       ========================================================= */
+
+    pauseButton.addEventListener("click", () => {
+      isPaused = !isPaused;
+      pauseButton.textContent = isPaused ? "Resume" : "Pause";
+    });
+
+    resetButton.addEventListener("click", () => {
+      resetAnimation();
+    });
+
+    speedSlider.addEventListener("input", () => {
+      speedMultiplier = Number(speedSlider.value);
+      updateSpeedDisplay();
+      savePreferences();
+    });
+
+    resetSpeedButton.addEventListener("click", () => {
+      speedMultiplier = 1;
+      speedSlider.value = "1";
+      updateSpeedDisplay();
+      savePreferences();
+    });
+
+    highlightDistanceSlider.addEventListener("input", () => {
+      highlightDistancePx = Number(highlightDistanceSlider.value);
+      updateHighlightDistanceDisplay();
+      savePreferences();
+    });
+
+    highlightZoomSlider.addEventListener("input", () => {
+      highlightZoomScale = Number(highlightZoomSlider.value);
+      updateHighlightZoomDisplay();
+      savePreferences();
+    });
+
+    dvdSizeSlider.addEventListener("input", () => {
+      dvdSizeScale = Number(dvdSizeSlider.value);
+      applyDvdSize();
+      savePreferences();
+    });
+
+    cornerWatchButton.addEventListener("click", () => {
+      isCornerWatchEnabled = !isCornerWatchEnabled;
+      cornerWatchButton.textContent = isCornerWatchEnabled ? "Highlight: On" : "Highlight: Off";
+      cornerWatchButton.classList.toggle("active", isCornerWatchEnabled);
+
+      if (!isCornerWatchEnabled) {
+        isCornerWatchActive = false;
+        dvdLogo.classList.remove("watch-active");
+      }
+
+      savePreferences();
+    });
+
+    cornerToleranceSlider.addEventListener("input", () => {
+      cornerTolerancePx = Number(cornerToleranceSlider.value);
+      updateCornerToleranceDisplay();
+      savePreferences();
+    });
+
+    resetToleranceButton.addEventListener("click", () => {
+      cornerTolerancePx = 0;
+      cornerToleranceSlider.value = "0";
+      updateCornerToleranceDisplay();
+      savePreferences();
+    });
+
+    window.addEventListener("resize", () => {
+      keepLogoInsideWindow();
+      updateCornerProbabilityDisplay();
+    });
+
+    window.addEventListener("pointermove", handleMouseReveal);
+
+    menuButton.addEventListener("click", toggleSettingsPanel);
+    closeMenuButton.addEventListener("click", closeSettingsPanel);
+
+    defaultBgButton.addEventListener("click", () => {
+      setBackgroundMode("default");
+    });
+
+    imageBgButton.addEventListener("click", () => {
+      backgroundInput.click();
+    });
+
+    backgroundInput.addEventListener("change", () => {
+      const file = backgroundInput.files[0];
+
+      readImageFile(file, (imageUrl) => {
+        customBackgroundDataUrl = imageUrl;
+        document.documentElement.style.setProperty("--custom-bg-image", `url("${imageUrl}")`);
+        setBackgroundMode("image");
+        savePreferences();
+      });
+    });
+
+    defaultLogoButton.addEventListener("click", () => {
+      setLogoMode("default");
+      updateFavicon(colors[colorIndex]);
+    });
+
+    customLogoButton.addEventListener("click", () => {
+      logoInput.click();
+    });
+
+    logoInput.addEventListener("change", () => {
+      const file = logoInput.files[0];
+
+      readImageFile(file, (imageUrl) => {
+        customLogoDataUrl = imageUrl;
+        customLogoImage.src = imageUrl;
+        setLogoMode("custom");
+        updateFavicon(colors[colorIndex]);
+        savePreferences();
+      });
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeSettingsPanel();
+      }
+    });
+
+    document.addEventListener("pointerdown", (event) => {
+      if (!isSettingsOpen) {
+        return;
+      }
+
+      const clickedInsidePanel = settingsPanel.contains(event.target);
+      const clickedMenuButton = menuButton.contains(event.target);
+
+      if (!clickedInsidePanel && !clickedMenuButton) {
+        closeSettingsPanel();
+      }
+    });
+
+    clearPrefsButton.addEventListener("click", () => {
+      clearSavedPreferences();
+    });
+
+    debugCornerButton.addEventListener("click", () => {
+      prepareDebugCornerShot();
+    });
+
+    // #endregion 27_JS_EVENT_LISTENERS
+
+    // #region 28_JS_STARTUP
+    /* =========================================================
+       STARTUP
+       ---------------------------------------------------------
+       Initializes the page and starts the animation loop.
+       ========================================================= */
+
+    loadPreferences();
+    applyDvdSize();
+    resetAnimation();
+    updateSpeedDisplay();
+    updateHighlightDistanceDisplay();
+    updateHighlightZoomDisplay();
+    updateCornerToleranceDisplay();
+    requestAnimationFrame(animate);
+
+    // #endregion 28_JS_STARTUP
+  </script>
+</body>
+
+</html>
