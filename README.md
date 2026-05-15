@@ -20,10 +20,6 @@ The DVD logo moves around the browser window, bounces when it touches the screen
 
 The whole app runs from **one HTML file**.
 
-No build tools.  
-No frameworks.  
-No server required.  
-Just open the HTML file in a browser.
 
 ---
 
@@ -210,6 +206,8 @@ dvd-logo-bouncer.html
 ```
 
 No installation needed.
+
+### or Press on the Logo on Top Page to Open 👆🏻
 
 ---
 
